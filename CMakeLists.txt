@@ -9,7 +9,7 @@ find_package(OpenGL REQUIRED)
 
 include_directories(dependencies/include)
 find_package(glfw3 REQUIRED)
-add_executable(main main.cpp)
+add_executable(main main.cpp mc_shaders.cpp mc_shaders.h)
 
 target_include_directories(main PRIVATE ${OPENGL_INCLUDE_DIR})
 
