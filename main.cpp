@@ -5,25 +5,35 @@
 
 #define GLEW_STATIC
 #include <GL/glew.h>
-
+#include <SOIL2/SOIL2.h>
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include "mc_shaders.h"
 
-
-enum {
-    INFO_LOG_BUFFER_SIZE = 512,
+enum SIZES {
     VBO_ARRAY_SIZE = 1,
     WINDOW_WIDTH = 800,
     WINDOW_HEIGHT = 600
 };
 
 
-void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mode) {
+static const char *WINDOW_TITLE = "Alexander Linnik";
+static const char *VERTEX_SHADER_NAME = "vert.glsl";
+static const char *FRAGMENT_SHADER_NAME = "fragment.glsl";
+static const char *RESOURCES_DIR = "resources/";
+static const char *CONTAINER_FNAME = "container.jpg";
+static const char *FACE_FNAME = "awesomeface.jpg";
+
+
+inline void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mode) {
     if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GL_TRUE);
 }
 
 
-inline void setGlfwOptions() {
+inline void setUpGlfwOptions() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
@@ -54,61 +64,16 @@ inline void setBufferVBO(GLuint &VBO, const GLfloat *vertices, const GLuint size
 }
 
 
-GLuint getShaderFromFile(GLenum type, const std::string &filename)
-{
-    std::ifstream fs(filename);
-    if (!fs.is_open())
-    {
-        std::cerr << "Can't open file" << std::endl;
-        return -1;
-    }
-
-    std::string shaderText((std::istreambuf_iterator<char>(fs)), std::istreambuf_iterator<char>());
-    GLuint shaderObj = glCreateShader(type);
-    const char *shaderSrc = shaderText.c_str();
-    glShaderSource(shaderObj, 1, &shaderSrc, nullptr);
-    glCompileShader(shaderObj);
-    GLint compileStatus;
-    glGetShaderiv(shaderObj, GL_COMPILE_STATUS, &compileStatus);
-    if (compileStatus != GL_TRUE)
-    {
-        GLchar infoLog[INFO_LOG_BUFFER_SIZE];
-        glGetShaderInfoLog(shaderObj, INFO_LOG_BUFFER_SIZE, nullptr, infoLog);
-        std::cerr << "Shader compilation failed : " << std::endl << infoLog << std::endl;
-        return -1;
-    }
-
-    return shaderObj;
-}
-
-
-GLuint getShaderProgram(const GLuint vertShader, const GLuint fragmentShader) {
-    GLuint shaderProgram;
-    shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
-    glDeleteShader(vertShader);
-    glDeleteShader(fragmentShader);
-
-    GLint success;
-    GLchar infoLog[INFO_LOG_BUFFER_SIZE];
-    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
-    if (!success) {
-        glGetProgramInfoLog(shaderProgram, INFO_LOG_BUFFER_SIZE, nullptr, infoLog);
-    }
-    return shaderProgram;
-}
-
-
 int main() {
     glfwInit();
-    setGlfwOptions();
+    setUpGlfwOptions();
+    const std::string containerPath = std::string(RESOURCES_DIR) + std::string(CONTAINER_FNAME);
+    const std::string facePath = std::string(RESOURCES_DIR) + std::string(FACE_FNAME);
 
     // Creating window
     GLFWwindow* window = glfwCreateWindow(WINDOW_WIDTH,
                                           WINDOW_HEIGHT,
-                                          "Alexander Linnik",
+                                          WINDOW_TITLE,
                                           nullptr,
                                           nullptr);
     if (!window)
@@ -130,16 +95,30 @@ int main() {
     glfwSetKeyCallback(window, keyCallback);
 
     // Vertical input
+//    static const GLfloat vertices[] = {
+//            0.5f, 0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f,
+//            0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f,
+//            -0.5f, 0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+//            -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f
+//    };
     GLfloat vertices[] = {
-            0.5f, 0.5f, 0.0f, 1.0f, 0.0f, 0.0f,
-            0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 0.0f,
-            -0.5f, 0.5f, 0.0f, 1.0f, 0.0f, 1.0f,
-            -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 1.0f
+            // Позиции          // Цвета             // Текстурные координаты
+            0.5f,  0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f,   // Верхний правый
+            0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f,   // Нижний правый
+            -0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f,   // Нижний левый
+            -0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f    // Верхний левый
+    };
+    GLfloat texCoords[] = {
+            0.0f, 0.0f,
+            1.0f, 0.0f,
+            0.5f, 1.0f
     };
     GLuint indices[] = {
-            0, 1, 2,
+            0, 1, 3,
             1, 2, 3
     };
+
+
 
     // VBO
     GLuint VBO;
@@ -149,10 +128,12 @@ int main() {
     GLuint VAO;
     glGenVertexArrays(1, &VAO);
     glBindVertexArray(VAO);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*) 0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (GLvoid*) 0);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*) (GLvoid*)(3* sizeof(GLfloat)));
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (GLvoid*) (GLvoid*)(3 * sizeof(GLfloat)));
     glEnableVertexAttribArray(1);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (GLvoid*) (GLvoid*)(6 * sizeof(GLfloat)));
+    glEnableVertexAttribArray(2);
 
     // EBO
     GLuint EBO;
@@ -162,21 +143,62 @@ int main() {
     glBindVertexArray(0);
 
     // Get Shader
-    const std::string vertShaderName = "vert.glsl";
-    GLuint vertShader = getShaderFromFile(GL_VERTEX_SHADER, vertShaderName);
-
-    const std::string fragmentShaderName = "fragment.glsl";
-    GLuint fragmentShader = getShaderFromFile(GL_FRAGMENT_SHADER, fragmentShaderName);
-
-    if (vertShader == - 1 || fragmentShader == -1) {
+    Shaders shader(VERTEX_SHADER_NAME, FRAGMENT_SHADER_NAME);
+    if (!shader.shaderCreatingStatus) {
         return -1;
     }
 
-    // Use shaders
-    GLuint shaderProgram = getShaderProgram(vertShader, fragmentShader);
-//    glUseProgram(shaderProgram);
+    // Texture1 Container
+    int containerWidth, containerHeight;
+    unsigned char *image1 = SOIL_load_image(containerPath.c_str(), &containerWidth, &containerHeight, 0, SOIL_LOAD_RGB);
 
+    GLuint texture1;
+    glGenTextures(1, &texture1);
+    glBindTexture(GL_TEXTURE_2D, texture1);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, containerWidth, containerHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, image1);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    SOIL_free_image_data(image1);
+    glBindTexture(GL_TEXTURE_2D, 0);
 
+    int faceWidth, faceHeight;
+    unsigned char *image2 = SOIL_load_image(facePath.c_str(), &faceWidth, &faceHeight, 0, SOIL_LOAD_RGB);
+
+    // Texture2 Face
+    GLuint texture2;
+    glGenTextures(1, &texture2);
+    glBindTexture(GL_TEXTURE_2D, texture2);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, faceWidth, faceHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, image2);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    SOIL_free_image_data(image2);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    // Obj transform
+    glm::mat4 trans(1.0f);
+    trans = glm::scale(trans, glm::vec3(0.5f, 0.5f, 0.5f));
+    trans = glm::rotate(trans, glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+
+    // Orthographic
+    //    glm::ortho(0.0f, 800.0f, 0.0f, 600.0f, 0.1f, 100.0f );
+
+    // Perspective
+    glm::mat4 projection(1.0f);
+    projection = glm::perspective( glm::radians(45.0f), (float)width/(float)height, 0.1f, 100.0f);
+    GLint projectionLoc = glGetUniformLocation(shader.shaderProgram, "projection");
+    glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
+
+    // Матрица модели
+    glm::mat4 model(1.0f);
+    model = glm::rotate(model, glm::radians(-55.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+
+    GLint modelLoc = glGetUniformLocation(shader.shaderProgram, "model");
+    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+
+    // Матрица вида
+    glm::mat4 view(1.0f);
+    view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
+
+    GLint viewLoc = glGetUniformLocation(shader.shaderProgram, "view");
+    glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
 
     //Start polling
     while(!glfwWindowShouldClose(window))
@@ -186,14 +208,22 @@ int main() {
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        glUseProgram(shaderProgram);
+        shader.use();
 
-        // Цвет формы
-        GLfloat timeValue = glfwGetTime();
-        GLfloat greenValue = (sin(timeValue) / 2 ) + 0.5;
-        GLint vertexColorLocation = glGetUniformLocation(shaderProgram, "ourColor");
-        glUniform4f(vertexColorLocation, 0.0f, greenValue, 0.0f, 1.0f);
+        glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
+        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
 
+
+        // TEXTURE CONTAINER
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, texture1);
+        glUniform1i(glGetUniformLocation(shader.shaderProgram, "ourTexture1"), 0);
+
+        // TEXTURE FACE
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, texture2);
+        glUniform1i(glGetUniformLocation(shader.shaderProgram, "ourTexture2"), 1);
 
         glBindVertexArray(VAO);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
@@ -204,3 +234,8 @@ int main() {
     glfwTerminate();
     return 0;
 }
+// glm::vec4 vec(1.0f, 0.0f, 0.0f, 1.0f);
+//    glm::mat4 trans(1.0f);
+//    trans = glm::translate(trans, glm::vec3(1.0f, 1.0f, 0.0f));
+//    vec = trans * vec;
+//    std::cout << vec.x << vec.y << vec.z << std::endl;
