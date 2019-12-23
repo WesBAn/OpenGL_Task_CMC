@@ -5,7 +5,6 @@
 #include <fstream>
 #include <iostream>
 
-
 const GLuint Shaders::INFO_LOG_BUFFER_SIZE = 512;
 
 

@@ -22,8 +22,6 @@ enum SIZES {
 static const char *WINDOW_TITLE = "Alexander Linnik";
 static const char *VERTEX_SHADER_NAME = "vert.glsl";
 static const char *FRAGMENT_SHADER_NAME = "fragment.glsl";
-static const char *LVERTEX_SHADER_NAME = "lampvert.glsl";
-static const char *LFRAGMENT_SHADER_NAME = "lampfragment.glsl";
 static const char *RESOURCES_DIR = "resources/";
 static const char *CONTAINER_FNAME = "container.jpg";
 static const char *FACE_FNAME = "awesomeface.jpg";
@@ -111,7 +109,7 @@ inline void setUpGlfwOptions() {
 }
 
 
-inline GLint setUpGlew() {
+inline GLuint setUpGlew() {
     glewExperimental = GL_TRUE;
     int initResult = glewInit();
 
@@ -126,18 +124,14 @@ inline void setShowingSize(GLFWwindow* window, GLint x, GLint y, GLint &width, G
 }
 
 
-void setBufferVBO(GLuint &VBO, const GLfloat *vertices, const GLuint sizeof_vertices, bool firstTime=GL_TRUE) {
-    if (firstTime) {
-        glGenBuffers(VBO_ARRAY_SIZE, &VBO);
-    }
+inline void setBufferVBO(GLuint &VBO, const GLfloat *vertices, const GLuint sizeof_vertices) {
+    glGenBuffers(VBO_ARRAY_SIZE, &VBO);
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    if (firstTime) {
-        glBufferData(GL_ARRAY_BUFFER, sizeof_vertices, vertices, GL_STATIC_DRAW);
-    }
+    glBufferData(GL_ARRAY_BUFFER, sizeof_vertices, vertices, GL_STATIC_DRAW);
 }
 
 
-int main() {
+int maisn() {
     glfwInit();
     setUpGlfwOptions();
     const std::string containerPath = std::string(RESOURCES_DIR) + std::string(CONTAINER_FNAME);
@@ -213,68 +207,80 @@ int main() {
             -0.5f,  0.5f, -0.5f,  0.0f, 1.0f
     };
 
-    // Get Shader
-    Shaders shader(VERTEX_SHADER_NAME, FRAGMENT_SHADER_NAME);
-    if (!shader.shaderCreatingStatus) {
-        return -1;
-    }
-    Shaders lampShader(LVERTEX_SHADER_NAME, LFRAGMENT_SHADER_NAME);
-    if (!lampShader.shaderCreatingStatus) {
-        return -1;
-    }
+    glm::vec3 cubePositions[] = {
+            glm::vec3( 0.0f,  0.0f,  0.0f),
+            glm::vec3( 2.0f,  5.0f, -15.0f),
+            glm::vec3(-1.5f, -2.2f, -2.5f),
+            glm::vec3(-3.8f, -2.0f, -12.3f),
+            glm::vec3( 2.4f, -0.4f, -3.5f),
+            glm::vec3(-1.7f,  3.0f, -7.5f),
+            glm::vec3( 1.3f, -2.0f, -2.5f),
+            glm::vec3( 1.5f,  2.0f, -2.5f),
+            glm::vec3( 1.5f,  0.2f, -1.5f),
+            glm::vec3(-1.3f,  1.0f, -1.5f)
+    };
 
     // VBO
     GLuint VBO;
     setBufferVBO(VBO, vertices, sizeof(vertices));
 
-    // cubeVAO
-    GLuint cubeVAO;
-    glGenVertexArrays(1, &cubeVAO);
-    setBufferVBO(VBO, vertices, sizeof(vertices), GL_FALSE);
-
-    glBindVertexArray(cubeVAO);
+    // VAO
+    GLuint VAO;
+    glGenVertexArrays(1, &VAO);
+    glBindVertexArray(VAO);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid*) 0);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid*) (GLvoid*)(3 * sizeof(GLfloat)));
     glEnableVertexAttribArray(1);
-    glBindVertexArray(0);
 
-
-    // ISTOCHNIK SVETA
-    GLuint lampVAO;
-    glGenVertexArrays(1, &lampVAO);
-    setBufferVBO(VBO, vertices, sizeof(vertices), GL_FALSE);
-
-    glBindVertexArray(lampVAO);
+    GLuint lightVAO;
+    glGenVertexArrays(1, &lightVAO);
+    glBindVertexArray(lightVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid*)0);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid*) (GLvoid*)(3 * sizeof(GLfloat)));
     glEnableVertexAttribArray(1);
     glBindVertexArray(0);
 
-    glm::vec3 lightPos(1.2f, 1.0f, 2.0f);
-    GLint objectColorLoc = glGetUniformLocation(shader.shaderProgram, "objectColor");
-    GLint lightColorLoc  = glGetUniformLocation(shader.shaderProgram, "lightColor");
+    // Get Shader
+    Shaders shader(VERTEX_SHADER_NAME, FRAGMENT_SHADER_NAME);
+    if (!shader.shaderCreatingStatus) {
+        return -1;
+    }
 
+//    // Texture1 Container
+//    GLint containerWidth, containerHeight;
+//    unsigned char *image1 = SOIL_load_image(containerPath.c_str(), &containerWidth, &containerHeight, 0, SOIL_LOAD_RGB);
+//
+//    GLuint texture1;
+//    glGenTextures(1, &texture1);
+//    glBindTexture(GL_TEXTURE_2D, texture1);
+//    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, containerWidth, containerHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, image1);
+//    glGenerateMipmap(GL_TEXTURE_2D);
+//    SOIL_free_image_data(image1);
+//    glBindTexture(GL_TEXTURE_2D, 0);
+//
+//    // Texture2 Face
+//    GLint faceWidth, faceHeight;
+//    unsigned char *image2 = SOIL_load_image(facePath.c_str(), &faceWidth, &faceHeight, 0, SOIL_LOAD_RGB);
+//
+//    GLuint texture2;
+//    glGenTextures(1, &texture2);
+//    glBindTexture(GL_TEXTURE_2D, texture2);
+//    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, faceWidth, faceHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, image2);
+//    glGenerateMipmap(GL_TEXTURE_2D);
+//    SOIL_free_image_data(image2);
+//    glBindTexture(GL_TEXTURE_2D, 0);
 
     // Perspective
     glm::mat4 projection(1.0f);
     projection = glm::perspective( glm::radians(45.0f), (float)width/(float)height, 0.1f, 100.0f);
     GLint projectionLoc = glGetUniformLocation(shader.shaderProgram, "projection");
-    GLint lampProjectionLoc = glGetUniformLocation(lampShader.shaderProgram, "projection");
-
     glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
 
     /// Матрица модели
     GLint modelLoc = glGetUniformLocation(shader.shaderProgram, "model");
-    GLint lampModelLoc = glGetUniformLocation(lampShader.shaderProgram, "model");
-
-    glm::mat4 model = glm::mat4(1.0f);
-    glm::mat4 lampModel(1.0f);
-    lampModel = glm::mat4(1.0f);
-    lampModel = glm::translate(lampModel, lightPos);
-    lampModel = glm::scale(lampModel, glm::vec3(0.2f));
-
 
     /// ENABLE GL_DEPTH_TEST
     glEnable(GL_DEPTH_TEST);
@@ -282,7 +288,6 @@ int main() {
     /// CAMERA
     glm::mat4 view(1.0f);
     GLint viewLoc = glGetUniformLocation(shader.shaderProgram, "view");
-    GLint lampViewLoc = glGetUniformLocation(lampShader.shaderProgram, "view");
 
     //Start polling
     while(!glfwWindowShouldClose(window))
@@ -291,37 +296,42 @@ int main() {
         GLfloat currentFrame = glfwGetTime();
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
+
         doMovement();
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+
+        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        shader.use();
         view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
 
-        // OBJ
-        shader.use();
-
-        glUniform3f(objectColorLoc, 1.0f, 0.5f, 0.31f);
-        glUniform3f(lightColorLoc,  1.0f, 1.0f, 1.0f); // зададим цвет источника света (белый)
-
         glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+
         glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
-        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+//        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
 
-        glBindVertexArray(cubeVAO);
-        glDrawArrays(GL_TRIANGLES, 0, 36);
+//        // TEXTURE CONTAINER
+//        glActiveTexture(GL_TEXTURE0);
+//        glBindTexture(GL_TEXTURE_2D, texture1);
+//        glUniform1i(glGetUniformLocation(shader.shaderProgram, "ourTexture1"), 0);
+//
+//        // TEXTURE FACE
+//        glActiveTexture(GL_TEXTURE1);
+//        glBindTexture(GL_TEXTURE_2D, texture2);
+//        glUniform1i(glGetUniformLocation(shader.shaderProgram, "ourTexture2"), 1);
 
-        // LAMP
-        lampShader.use();
-
-        glUniformMatrix4fv(lampViewLoc, 1, GL_FALSE, glm::value_ptr(view));
-        glUniformMatrix4fv(lampProjectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
-        glUniformMatrix4fv(lampModelLoc, 1, GL_FALSE, glm::value_ptr(lampModel));
-
-        glBindVertexArray(cubeVAO);
-        glDrawArrays(GL_TRIANGLES, 0, 36);
-
+        glBindVertexArray(VAO);
+        for (auto cubePosition : cubePositions)
+        {
+            // Матрица модели
+            glm::mat4 model(1.0f);
+            model = glm::translate(model, cubePosition);
+            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+            glDrawArrays(GL_TRIANGLES, 0, 36);
+        }
         glBindVertexArray(0);
         glfwSwapBuffers(window);
     }
     glfwTerminate();
     return 0;
 }
+

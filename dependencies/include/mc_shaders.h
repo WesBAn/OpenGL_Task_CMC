@@ -4,6 +4,7 @@
 #include <string>
 #include <GL/glew.h>
 
+
 class Shaders {
 private:
     static const GLuint INFO_LOG_BUFFER_SIZE;
