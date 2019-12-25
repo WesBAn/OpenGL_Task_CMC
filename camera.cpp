@@ -3,53 +3,32 @@
 //
 
 #include "camera.h"
+#include <GL/glew.h>
 #include <GLFW/glfw3.h>
-#include "old_main.cpp"
+#include <glm/gtc/matrix_transform.hpp>
 
-
-const GLfloat Camera::deltaTimeDefault = 0.0f;
-const GLfloat Camera::lastFrameDefault = 0.0f;  	// Время вывода последнего кадра
-const GLfloat Camera::lastXDefault = 400;
-const GLfloat Camera::lastYDefault = 300;
-const GLfloat Camera::yawDefault   = -90.0f;
-const GLfloat Camera::pitchDefault = 0.0f;
-const GLboolean Camera::firstMouseDefault = GL_TRUE;
-
-const glm::vec3 Camera::cameraPosDefault   = glm::vec3(0.0f, 0.0f,  3.0f);
-const glm::vec3 Camera::cameraFrontDefault = glm::vec3(0.0f, 0.0f, -1.0f);
-const glm::vec3 Camera::cameraUpDefault    = glm::vec3(0.0f, 1.0f,  0.0f);
+glm::vec3 Camera::cameraPos   = glm::vec3(0.0f, 0.0f,  3.0f);
+glm::vec3 Camera::cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
+glm::vec3 Camera::cameraUp    = glm::vec3(0.0f, 1.0f,  0.0f);
 
 
 
+GLfloat Camera::deltaTime = 0.0f;
+GLfloat Camera::lastX = 600;
+GLfloat Camera::lastY = 400;
+GLfloat Camera::yaw = -90.0f;
+GLfloat Camera::pitch = 0.0f;
+GLboolean Camera::firstMouse = GL_TRUE;
+GLfloat Camera::lastFrame = 0.0f;
+GLboolean *Camera::keys = nullptr;
 
-Camera::Camera (GLboolean *keys,
-                glm::vec3 cameraPos,
-                glm::vec3 cameraFront,
-                glm::vec3 cameraUp,
-                GLfloat deltaTime,
-                GLfloat lastFrame,
-                GLfloat lastX,
-                GLfloat lastY,
-                GLfloat yaw,
-                GLfloat pitch,
-                GLboolean firstMouse) {
 
-    this->keys = keys;
-    this->cameraPos = cameraPos;
-    this->cameraFront = cameraFront;
-    this->cameraUp = cameraUp;
-
-    this->deltaTime = deltaTime;
-    this->lastFrame = lastFrame;
-    this->lastX = lastX;
-    this->lastY = lastY;
-    this->yaw = yaw;
-    this->pitch = pitch;
-    this->firstMouse = firstMouse;
+Camera::Camera(GLboolean *keysArg) {
+    Camera::keys = keysArg;
 }
 
 
-void Camera::mouse_callback(const GLFWwindow* window, double xpos, double ypos)
+void Camera::mouse_callback(GLFWwindow* window, double xpos, double ypos)
 {
     if(firstMouse)
     {

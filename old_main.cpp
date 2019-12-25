@@ -30,7 +30,7 @@ static glm::vec3 cameraPos   = glm::vec3(0.0f, 0.0f,  3.0f);
 static glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
 static glm::vec3 cameraUp    = glm::vec3(0.0f, 1.0f,  0.0f);
 
-static bool keys[1024];
+static bool skeys[1024];
 
 static GLfloat deltaTime = 0.0f;
 static GLfloat lastFrame = 0.0f;  	// Время вывода последнего кадра

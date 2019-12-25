@@ -11,11 +11,14 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include "mc_shaders.h"
+#include "objectPositions.h"
+#include "camera.h"
+#include "materials.h"
 
 enum SIZES {
     VBO_ARRAY_SIZE = 1,
-    WINDOW_WIDTH = 800,
-    WINDOW_HEIGHT = 600
+    WINDOW_WIDTH = 1200,
+    WINDOW_HEIGHT = 800
 };
 
 
@@ -28,78 +31,16 @@ static const char *RESOURCES_DIR = "resources/";
 static const char *CONTAINER_FNAME = "container.jpg";
 static const char *FACE_FNAME = "awesomeface.jpg";
 
-static glm::vec3 cameraPos   = glm::vec3(0.0f, 0.0f,  3.0f);
-static glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
-static glm::vec3 cameraUp    = glm::vec3(0.0f, 1.0f,  0.0f);
-
-static bool keys[1024];
-
-static GLfloat deltaTime = 0.0f;
-static GLfloat lastFrame = 0.0f;  	// Время вывода последнего кадра
-static GLfloat lastX = 400;
-static GLfloat lastY = 300;
-static GLfloat yaw   = -90.0f;
-static GLfloat pitch = 0.0f;
-static GLboolean firstMouse = GL_TRUE;
+static GLboolean keys[1024];
 
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mode) {
     if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GL_TRUE);
-    GLfloat cameraSpeed = 0.05f;
     if(action == GLFW_PRESS)
         keys[key] = true;
     else if(action == GLFW_RELEASE)
         keys[key] = false;
 }
-
-void mouse_callback(GLFWwindow* window, double xpos, double ypos)
-{
-    if(firstMouse)
-    {
-        lastX = xpos;
-        lastY = ypos;
-        firstMouse = false;
-    }
-
-    GLfloat xoffset = xpos - lastX;
-    GLfloat yoffset = lastY - ypos;
-    lastX = xpos;
-    lastY = ypos;
-
-    GLfloat sensitivity = 0.05;
-    xoffset *= sensitivity;
-    yoffset *= sensitivity;
-
-    yaw   += xoffset;
-    pitch += yoffset;
-
-    if(pitch > 89.0f)
-        pitch = 89.0f;
-    if(pitch < -89.0f)
-        pitch = -89.0f;
-
-    glm::vec3 front;
-    front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-    front.y = sin(glm::radians(pitch));
-    front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-    cameraFront = glm::normalize(front);
-}
-
-
-void doMovement()
-{
-    // Camera controls
-    GLfloat cameraSpeed = 5.0f * deltaTime;;
-    if(keys[GLFW_KEY_W])
-        cameraPos += cameraSpeed * cameraFront;
-    if(keys[GLFW_KEY_S])
-        cameraPos -= cameraSpeed * cameraFront;
-    if(keys[GLFW_KEY_A])
-        cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
-    if(keys[GLFW_KEY_D])
-        cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
-}
-
 
 
 inline void setUpGlfwOptions() {
@@ -137,28 +78,89 @@ void setBufferVBO(GLuint &VBO, const GLfloat *vertices, const GLuint sizeof_vert
 }
 
 
+GLuint setCubeVAO(GLuint &VBO) {
+    GLuint cubeVAO;
+    glGenVertexArrays(1, &cubeVAO);
+    setBufferVBO(VBO, vertices, sizeof(vertices), GL_FALSE);
+
+    glBindVertexArray(cubeVAO);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*) 0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*) (GLvoid*)(3 * sizeof(GLfloat)));
+    glEnableVertexAttribArray(1);
+    glBindVertexArray(0);
+    return cubeVAO;
+}
+
+GLuint setLampVAO(GLuint &VBO) {
+    GLuint lampVAO;
+    glGenVertexArrays(1, &lampVAO);
+    setBufferVBO(VBO, vertices, sizeof(vertices), GL_FALSE);
+
+    glBindVertexArray(lampVAO);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)0);
+    glEnableVertexAttribArray(0);
+    glBindVertexArray(0);
+    return lampVAO;
+}
+
+void checkWindowCreated(GLFWwindow *window) {
+    if (!window)
+    {
+        std::cout << "Failed to create GLFW window" << std::endl;
+        glfwTerminate();
+        throw (-1);
+    }
+}
+
+Materials setMaterial(Shaders &objShader) {
+    /// MATERIALS MATERIAL
+    /// OBJ
+    glm::vec3 materialAmbient(1.0f, 0.5f, 0.31f);
+    glm::vec3 materialDiffuse(1.0f, 0.5f, 0.31f);
+    glm::vec3 materialSpecular(0.5f, 0.5f, 0.5f);
+    GLfloat materialShininess = 32.0f;
+    const char *materialFieldNames[] = {
+            "material.ambient",
+            "material.diffuse",
+            "material.specular",
+            "material.shininess"
+    };
+
+    Materials materials(materialAmbient, materialDiffuse, materialSpecular, materialShininess, objShader, materialFieldNames);
+    return materials;
+}
+
+Lights setLights(Shaders &objShader, glm::vec3 lightPos) {
+    glm::vec3 lightAmbient(0.2f, 0.2f, 0.2f);
+    glm::vec3 lightDiffuse(0.5f, 0.5f, 0.5f);
+    glm::vec3 lightSpecular(1.0f, 1.0f, 1.0f);
+    const char *lightsFieldNames[] = {
+            "light.ambient",
+            "light.diffuse",
+            "light.specular",
+            "light.position"
+    };
+
+    Lights lights(lightAmbient, lightDiffuse, lightSpecular, lightPos, objShader, lightsFieldNames);
+    return lights;
+}
+
+
+
 int main() {
-    glfwInit();
-    setUpGlfwOptions();
     const std::string containerPath = std::string(RESOURCES_DIR) + std::string(CONTAINER_FNAME);
     const std::string facePath = std::string(RESOURCES_DIR) + std::string(FACE_FNAME);
 
-    // Creating window
+    glfwInit();
+    setUpGlfwOptions();
+    // Window set
     GLFWwindow* window = glfwCreateWindow(WINDOW_WIDTH,
                                           WINDOW_HEIGHT,
                                           WINDOW_TITLE,
                                           nullptr,
                                           nullptr);
-    if (!window)
-    {
-        std::cout << "Failed to create GLFW window" << std::endl;
-        glfwTerminate();
-        return -1;
-    }
-
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    glfwSetCursorPosCallback(window, mouse_callback);
-    //Setting size
+    checkWindowCreated(window);
     GLint width, height;
     setShowingSize(window, 0, 0, width, height);
 
@@ -166,107 +168,53 @@ int main() {
     GLint setUpGlewResult = setUpGlew();
     if (setUpGlewResult == -1) return -1;
 
-    //Setting callback
+    // Get Shader
+    Shaders objShader(VERTEX_SHADER_NAME, FRAGMENT_SHADER_NAME);
+    if (!objShader.shaderCreatingStatus) return -1;
+
+    Shaders lampShader(LVERTEX_SHADER_NAME, LFRAGMENT_SHADER_NAME);
+    if (!lampShader.shaderCreatingStatus) return -1;
+
+    Camera camera(keys);
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    glfwSetCursorPosCallback(window, Camera::mouse_callback);
+
     glfwSetKeyCallback(window, keyCallback);
 
-    GLfloat vertices[] = {
-            -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
-            0.5f, -0.5f, -0.5f,  1.0f, 0.0f,
-            0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-            0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-            -0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
-            -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
+    glEnable(GL_DEPTH_TEST);
 
-            -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-            0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-            0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
-            0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
-            -0.5f,  0.5f,  0.5f,  0.0f, 1.0f,
-            -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-
-            -0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-            -0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-            -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-            -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-            -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-            -0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-
-            0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-            0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-            0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-            0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-            0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-            0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-
-            -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-            0.5f, -0.5f, -0.5f,  1.0f, 1.0f,
-            0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-            0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-            -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-            -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-
-            -0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
-            0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-            0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-            0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-            -0.5f,  0.5f,  0.5f,  0.0f, 0.0f,
-            -0.5f,  0.5f, -0.5f,  0.0f, 1.0f
-    };
-
-    // Get Shader
-    Shaders shader(VERTEX_SHADER_NAME, FRAGMENT_SHADER_NAME);
-    if (!shader.shaderCreatingStatus) {
-        return -1;
-    }
-    Shaders lampShader(LVERTEX_SHADER_NAME, LFRAGMENT_SHADER_NAME);
-    if (!lampShader.shaderCreatingStatus) {
-        return -1;
-    }
-
+    /// OBJECTS
     // VBO
     GLuint VBO;
     setBufferVBO(VBO, vertices, sizeof(vertices));
 
     // cubeVAO
-    GLuint cubeVAO;
-    glGenVertexArrays(1, &cubeVAO);
-    setBufferVBO(VBO, vertices, sizeof(vertices), GL_FALSE);
+    GLuint cubeVAO = setCubeVAO(VBO);
 
-    glBindVertexArray(cubeVAO);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid*) 0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid*) (GLvoid*)(3 * sizeof(GLfloat)));
-    glEnableVertexAttribArray(1);
-    glBindVertexArray(0);
+    // ISTOCHNIK SVETA VAO
+    GLuint lampVAO = setLampVAO(VBO);
 
+    //////////////
+//    GLint objectColorLoc = glGetUniformLocation(objShader.shaderProgram, "objectColor");
 
-    // ISTOCHNIK SVETA
-    GLuint lampVAO;
-    glGenVertexArrays(1, &lampVAO);
-    setBufferVBO(VBO, vertices, sizeof(vertices), GL_FALSE);
-
-    glBindVertexArray(lampVAO);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid*) (GLvoid*)(3 * sizeof(GLfloat)));
-    glEnableVertexAttribArray(1);
-    glBindVertexArray(0);
-
+    /// Позиция lightPos
     glm::vec3 lightPos(1.2f, 1.0f, 2.0f);
-    GLint objectColorLoc = glGetUniformLocation(shader.shaderProgram, "objectColor");
-    GLint lightColorLoc  = glGetUniformLocation(shader.shaderProgram, "lightColor");
 
+    /// MATERIALS
+    Materials materials = setMaterial(objShader);    /// MATERIALS
+    Lights lights = setLights(objShader, lightPos);  /// LIGHTS
 
-    // Perspective
+    /// MATRIXES
+    /// Матрица перспективы
     glm::mat4 projection(1.0f);
     projection = glm::perspective( glm::radians(45.0f), (float)width/(float)height, 0.1f, 100.0f);
-    GLint projectionLoc = glGetUniformLocation(shader.shaderProgram, "projection");
+    GLint projectionLoc = glGetUniformLocation(objShader.shaderProgram, "projection");
     GLint lampProjectionLoc = glGetUniformLocation(lampShader.shaderProgram, "projection");
 
     glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
 
     /// Матрица модели
-    GLint modelLoc = glGetUniformLocation(shader.shaderProgram, "model");
+    GLint modelLoc = glGetUniformLocation(objShader.shaderProgram, "model");
     GLint lampModelLoc = glGetUniformLocation(lampShader.shaderProgram, "model");
 
     glm::mat4 model = glm::mat4(1.0f);
@@ -275,36 +223,31 @@ int main() {
     lampModel = glm::translate(lampModel, lightPos);
     lampModel = glm::scale(lampModel, glm::vec3(0.2f));
 
-
-    /// ENABLE GL_DEPTH_TEST
-    glEnable(GL_DEPTH_TEST);
-
-    /// CAMERA
+    /// Матрица вида
     glm::mat4 view(1.0f);
-    GLint viewLoc = glGetUniformLocation(shader.shaderProgram, "view");
+    GLint viewLoc = glGetUniformLocation(objShader.shaderProgram, "view");
     GLint lampViewLoc = glGetUniformLocation(lampShader.shaderProgram, "view");
+
+    GLint viewPosLoc = glGetUniformLocation(objShader.shaderProgram, "viewPos");
 
     //Start polling
     while(!glfwWindowShouldClose(window))
     {
         glfwPollEvents();
-        GLfloat currentFrame = glfwGetTime();
-        deltaTime = currentFrame - lastFrame;
-        lastFrame = currentFrame;
-        doMovement();
+        camera.cameraPollFrame();
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+        view = camera.getView();
 
         // OBJ
-        shader.use();
-
-        glUniform3f(objectColorLoc, 1.0f, 0.5f, 0.31f);
-        glUniform3f(lightColorLoc,  1.0f, 1.0f, 1.0f); // зададим цвет источника света (белый)
-
+        objShader.use();
         glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
         glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+
+        glUniform3f(viewPosLoc, Camera::cameraPos.x, Camera::cameraPos.y, Camera::cameraPos.z);
+        materials.setUniforms();
+        lights.setUniforms();
 
         glBindVertexArray(cubeVAO);
         glDrawArrays(GL_TRIANGLES, 0, 36);
@@ -316,7 +259,7 @@ int main() {
         glUniformMatrix4fv(lampProjectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
         glUniformMatrix4fv(lampModelLoc, 1, GL_FALSE, glm::value_ptr(lampModel));
 
-        glBindVertexArray(cubeVAO);
+        glBindVertexArray(lampVAO);
         glDrawArrays(GL_TRIANGLES, 0, 36);
 
         glBindVertexArray(0);
