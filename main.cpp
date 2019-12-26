@@ -18,7 +18,8 @@
 enum SIZES {
     VBO_ARRAY_SIZE = 1,
     WINDOW_WIDTH = 1200,
-    WINDOW_HEIGHT = 800
+    WINDOW_HEIGHT = 800,
+    SKYBOX_FACES_AMOUNT = 6
 };
 
 enum LIGHT_MODES {
@@ -28,18 +29,30 @@ enum LIGHT_MODES {
 };
 
 
-
 static const char *WINDOW_TITLE = "Alexander Linnik";
-static const char *VERTEX_SHADER_NAME = "vert.glsl";
-static const char *FRAGMENT_SHADER_NAME = "fragment.glsl";
-static const char *LVERTEX_SHADER_NAME = "lampvert.glsl";
-static const char *LFRAGMENT_SHADER_NAME = "lampfragment.glsl";
+static const char *VERTEX_SHADER_NAME = "shaders/vert.glsl";
+static const char *FRAGMENT_SHADER_NAME = "shaders/fragment.glsl";
+static const char *LVERTEX_SHADER_NAME = "shaders/lampvert.glsl";
+static const char *LFRAGMENT_SHADER_NAME = "shaders/lampfragment.glsl";
+static const char *SKYBOX_VERTEX_SHADER_NAME = "shaders/skyboxvert.glsl";
+static const char *SKYBOX_FRAGMENT_SHADER_NAME = "shaders/skyboxfragment.glsl";
 static const char *RESOURCES_DIR = "resources/";
 static const char *CONTAINER_FNAME = "container2.png";
 static const char *BLICK_FNAME = "BLICK2.png";
+static const char *AME_MAJESTY_PACK[] = {
+        "ame_majesty/majesty_rt.tga",
+        "ame_majesty/majesty_lf.tga",
+        "ame_majesty/majesty_up.tga",
+        "ame_majesty/majesty_dn.tga",
+        "ame_majesty/majesty_ft.tga",
+        "ame_majesty/majesty_bk.tga"
+};
+const std::string containerPath = std::string(RESOURCES_DIR) + std::string(CONTAINER_FNAME);
+const std::string specularMapPath = std::string(RESOURCES_DIR) + std::string(BLICK_FNAME);
 
 static GLboolean keys[1024];
-int lightMode = FULL_MODE;
+GLint lightMode = FULL_MODE;
+
 
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mode) {
     if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
@@ -54,7 +67,6 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mode
 }
 
 
-
 inline void setUpGlfwOptions() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -63,6 +75,15 @@ inline void setUpGlfwOptions() {
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // Mac OS X
 }
 
+
+void checkWindowCreated(GLFWwindow *window) {
+    if (!window)
+    {
+        std::cout << "Failed to create GLFW window" << std::endl;
+        glfwTerminate();
+        throw (-1);
+    }
+}
 
 inline GLint setUpGlew() {
     glewExperimental = GL_TRUE;
@@ -76,6 +97,25 @@ inline void setShowingSize(GLFWwindow* window, GLint x, GLint y, GLint &width, G
     glfwGetFramebufferSize(window, &width, &height);
     glViewport(0, 0, width, height);
     glfwMakeContextCurrent(window);
+}
+
+
+GLFWwindow *baseSetUp(GLint &width, GLint &height) {
+    glfwInit();
+    setUpGlfwOptions();
+    // Window set
+    GLFWwindow* window = glfwCreateWindow(WINDOW_WIDTH,
+                                          WINDOW_HEIGHT,
+                                          WINDOW_TITLE,
+                                          nullptr,
+                                          nullptr);
+    checkWindowCreated(window);
+    setShowingSize(window, 0, 0, width, height);
+
+    //Setting GLEW
+    GLint setUpGlewResult = setUpGlew();
+    if (setUpGlewResult == -1) throw -1;
+    return window;
 }
 
 
@@ -100,6 +140,42 @@ GLuint generateAndDownloadTexture(const char *containerPath) {
     glGenerateMipmap(GL_TEXTURE_2D);
     SOIL_free_image_data(image);
     glBindTexture(GL_TEXTURE_2D, 0);
+    return texture;
+}
+
+
+GLuint downloadAndSetUpSkybox() {
+    GLuint texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, texture);
+
+    const GLint args[SKYBOX_FACES_AMOUNT] = {
+            GL_TEXTURE_CUBE_MAP_POSITIVE_X,
+            GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
+            GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
+            GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
+            GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
+            GL_TEXTURE_CUBE_MAP_NEGATIVE_Z
+    };
+
+    int width, height, channels;
+    for (GLuint i = 0; i < SKYBOX_FACES_AMOUNT; ++i) {
+        std::string partName = std::string(RESOURCES_DIR) + std::string(AME_MAJESTY_PACK[i]);
+        unsigned char *image = SOIL_load_image(partName.c_str(), &width, &height, &channels, SOIL_LOAD_RGB);
+        if (image) {
+            std::cout << "LOADED TEXTURE\n";
+        }
+
+        glTexImage2D(args[i], 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, image);
+        SOIL_free_image_data(image);
+
+    }
+
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
     return texture;
 }
 
@@ -132,14 +208,22 @@ GLuint setLampVAO(GLuint &VBO) {
     return lampVAO;
 }
 
-void checkWindowCreated(GLFWwindow *window) {
-    if (!window)
-    {
-        std::cout << "Failed to create GLFW window" << std::endl;
-        glfwTerminate();
-        throw (-1);
-    }
+
+GLuint setSkyboxVAO() {
+    // skybox VAO
+    GLuint skyboxVBO;
+    glGenBuffers(1, &skyboxVBO);
+
+    GLuint skyboxVAO;
+    glGenVertexArrays(1, &skyboxVAO);
+    glBindVertexArray(skyboxVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    return skyboxVAO;
 }
+
 
 Materials setMaterial(Shaders &objShader, GLboolean isTexture=GL_FALSE) {
     /// MATERIALS MATERIAL
@@ -195,7 +279,7 @@ Lights setDirectLights(Shaders &objShader, glm::vec3 lightPos) {
     glm::vec3 lightSpecular(1.0f, 1.0f, 1.0f);
     GLfloat constant = 1.0f;
     GLfloat linear = 0.045f;
-    GLfloat quadratic = 0.0075;
+    GLfloat quadratic = 0.0075f;
     const char *lightsFieldNames[] = {
             "light.ambient",
             "light.diffuse",
@@ -210,64 +294,65 @@ Lights setDirectLights(Shaders &objShader, glm::vec3 lightPos) {
     return lights;
 }
 
+void renderSkybox(GLint &skyboxViewLoc,
+        GLint &skyboxProjectionLoc,
+        Camera &camera,
+        Shaders &skyboxShader,
+        GLuint &skyboxVAO,
+        GLuint &skyboxTexture,
+        glm::mat4 projection) {
+    glDepthMask(GL_FALSE);
+    skyboxShader.use();
+    glm::mat4 skyboxView(glm::mat3(camera.getView()));
+    glUniformMatrix4fv(skyboxViewLoc, 1, GL_FALSE, glm::value_ptr(skyboxView));
+    glUniformMatrix4fv(skyboxProjectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
+
+
+    glBindVertexArray(skyboxVAO);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, skyboxTexture);
+    glDrawArrays(GL_TRIANGLES, 0, 36);
+    glDepthMask(GL_TRUE);
+}
+
 
 int main() {
-    const std::string containerPath = std::string(RESOURCES_DIR) + std::string(CONTAINER_FNAME);
-    const std::string specularMapPath = std::string(RESOURCES_DIR) + std::string(BLICK_FNAME);
 
-//    const std::string facePath = std::string(RESOURCES_DIR) + std::string(FACE_FNAME);
 
-    glfwInit();
-    setUpGlfwOptions();
-    // Window set
-    GLFWwindow* window = glfwCreateWindow(WINDOW_WIDTH,
-                                          WINDOW_HEIGHT,
-                                          WINDOW_TITLE,
-                                          nullptr,
-                                          nullptr);
-    checkWindowCreated(window);
+    // BASE SET
     GLint width, height;
-    setShowingSize(window, 0, 0, width, height);
+    GLFWwindow *window = baseSetUp(width, height);
 
-    //Setting GLEW
-    GLint setUpGlewResult = setUpGlew();
-    if (setUpGlewResult == -1) return -1;
-
-    // Get Shader
-    Shaders objShader(VERTEX_SHADER_NAME, FRAGMENT_SHADER_NAME);
-    if (!objShader.shaderCreatingStatus) return -1;
-
-    Shaders lampShader(LVERTEX_SHADER_NAME, LFRAGMENT_SHADER_NAME);
-    if (!lampShader.shaderCreatingStatus) return -1;
-
+    /// CAMERA AND CALLBACKS
     Camera camera(keys);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glfwSetCursorPosCallback(window, Camera::mouse_callback);
-
     glfwSetKeyCallback(window, keyCallback);
 
+    ///DEPTH
     glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
 
-    /// OBJECTS
+    /// Get Shader
+    Shaders objShader(VERTEX_SHADER_NAME, FRAGMENT_SHADER_NAME);
+    Shaders lampShader(LVERTEX_SHADER_NAME, LFRAGMENT_SHADER_NAME);
+    Shaders skyboxShader(SKYBOX_VERTEX_SHADER_NAME, SKYBOX_FRAGMENT_SHADER_NAME);
+
+    if (!lampShader.shaderCreatingStatus or !objShader.shaderCreatingStatus) return -1;
+
+    /// Get textures
+    GLuint containerTexture = generateAndDownloadTexture(containerPath.c_str());
+    GLuint specularMapTexture = generateAndDownloadTexture(specularMapPath.c_str());
+    GLuint skyboxTexture = downloadAndSetUpSkybox();
+
+    /// VAO and VBO
     // VBO
     GLuint VBO;
     setBufferVBO(VBO, vertices, sizeof(vertices));
 
-    // cubeVAO
+    // VAO
     GLuint cubeVAO = setCubeVAO(VBO);
-
-    // ISTOCHNIK SVETA VAO
     GLuint lampVAO = setLampVAO(VBO);
-
-    /// TEXTURES
-    GLuint containerTexture = generateAndDownloadTexture(containerPath.c_str());
-    GLuint specularMapTexture = generateAndDownloadTexture(specularMapPath.c_str());
-
-    //////////////
-//    GLint objectColorLoc = glGetUniformLocation(objShader.shaderProgram, "objectColor");
-
-    /// Позиция lightPos
-    glm::vec3 lightPos(1.2f, 1.0f, 2.0f);
+    GLuint skyboxVAO = setSkyboxVAO();
 
     /// MATERIALS
     Materials materials = setMaterial(objShader, GL_TRUE);    /// MATERIALS
@@ -275,17 +360,17 @@ int main() {
     Lights sunLights = setSunLights(objShader); /// LIGHTS SUN
     GLint lightModeLoc = glGetUniformLocation(objShader.shaderProgram, "lightMode");
 
-
     /// MATRIXES
-    /// Матрица перспективы
+    // Матрица перспективы
     glm::mat4 projection(1.0f);
     projection = glm::perspective( glm::radians(45.0f), (float)width/(float)height, 0.1f, 100.0f);
     GLint projectionLoc = glGetUniformLocation(objShader.shaderProgram, "projection");
     GLint lampProjectionLoc = glGetUniformLocation(lampShader.shaderProgram, "projection");
+    GLint skyboxProjectionLoc = glGetUniformLocation(skyboxShader.shaderProgram, "projection");
 
     glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
 
-    /// Матрица модели
+    // Матрица модели
     GLint modelLoc = glGetUniformLocation(objShader.shaderProgram, "model");
     GLint lampModelLoc = glGetUniformLocation(lampShader.shaderProgram, "model");
 
@@ -295,18 +380,20 @@ int main() {
     lampModel = glm::translate(lampModel, lightPos);
     lampModel = glm::scale(lampModel, glm::vec3(0.2f));
 
-    /// Матрица вида
+    // Матрица вида
     glm::mat4 view(1.0f);
     GLint viewLoc = glGetUniformLocation(objShader.shaderProgram, "view");
-    GLint lampViewLoc = glGetUniformLocation(lampShader.shaderProgram, "view");
-
     GLint viewPosLoc = glGetUniformLocation(objShader.shaderProgram, "viewPos");
-    //Start polling
+    GLint lampViewLoc = glGetUniformLocation(lampShader.shaderProgram, "view");
+    GLint skyboxViewLoc = glGetUniformLocation(skyboxShader.shaderProgram, "view");
+
+
+    ///Start polling///
     while(!glfwWindowShouldClose(window))
     {
         glfwPollEvents();
         camera.cameraPollFrame();
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+//        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         view = camera.getView();
 
@@ -322,29 +409,25 @@ int main() {
         ///SET UNIFORMS
         materials.setUniforms();
         sunLights.setUniforms();
-        directLights.setUniforms();
 
         glUniform3f(viewPosLoc, Camera::cameraPos.x, Camera::cameraPos.y, Camera::cameraPos.z);
         glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
         glUniform1i(lightModeLoc, lightMode);
 
-//        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-
         glBindVertexArray(cubeVAO);
         for(GLuint i = 0; i < 10; i++)
         {
             model = glm::mat4(1.0f);
             model = glm::translate(model, cubePositions[i]);
-//            GLfloat angle = 20.0f * i;
-//            model = glm::rotate(model, angle, glm::vec3(1.0f, 0.3f, 0.5f));
             glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
 
-        // LAMP
+        /// LAMP
         if (lightMode != SUN_LIGHT_MODE) {
+            directLights.setUniforms();
             lampShader.use();
 
             glUniformMatrix4fv(lampViewLoc, 1, GL_FALSE, glm::value_ptr(view));
@@ -354,6 +437,8 @@ int main() {
 
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
+        renderSkybox(skyboxViewLoc, skyboxProjectionLoc, camera, skyboxShader, skyboxVAO, skyboxTexture, projection);
+
         glBindVertexArray(0);
         glfwSwapBuffers(window);
     }

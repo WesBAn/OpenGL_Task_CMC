@@ -14,12 +14,13 @@ add_executable(main main.cpp mc_shaders.cpp dependencies/include/objectPositions
 target_include_directories(main PRIVATE ${OPENGL_INCLUDE_DIR})
 
 add_library(glew STATIC IMPORTED)
-add_library(soil2 SHARED IMPORTED)
-#find_library(soil soil ${CMAKE_SOURCE_DIR}/dependencies/lib/libSOIL.a)
 set_property(TARGET glew PROPERTY
         IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/dependencies/lib/libGLEW.a)
+
+add_library(soil2 SHARED IMPORTED)
 set_property(TARGET soil2 PROPERTY
         IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/dependencies/lib/libSOIL2.so)
+
 target_link_libraries(main LINK_PUBLIC ${OPENGL_gl_LIBRARY} glfw glew soil2)
 
 #find_library(GLEW_LIB glew ${CMAKE_SOURCE_DIR}/${INCLUDING_LIBS}/libGLEW.a)

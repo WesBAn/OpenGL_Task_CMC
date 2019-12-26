@@ -86,8 +86,8 @@ vec4 directModeColor()
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
     vec3 specular = light.specular * vec3(texture(material.specular, TexCoords)) * spec * attenuation;
 
-    vec3 result = min(vec3(1.0), ambient + diffuse + specular);
-    return vec4(result, 1.0);
+    vec3 result = min(vec3(1.0f), ambient + diffuse + specular);
+    return vec4(result, 1.0f);
 }
 
 
