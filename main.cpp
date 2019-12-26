@@ -21,6 +21,13 @@ enum SIZES {
     WINDOW_HEIGHT = 800
 };
 
+enum LIGHT_MODES {
+    SUN_LIGHT_MODE = 0,
+    DIRECT_LIGHT_MODE = 1,
+    FULL_MODE = 2
+};
+
+
 
 static const char *WINDOW_TITLE = "Alexander Linnik";
 static const char *VERTEX_SHADER_NAME = "vert.glsl";
@@ -28,19 +35,24 @@ static const char *FRAGMENT_SHADER_NAME = "fragment.glsl";
 static const char *LVERTEX_SHADER_NAME = "lampvert.glsl";
 static const char *LFRAGMENT_SHADER_NAME = "lampfragment.glsl";
 static const char *RESOURCES_DIR = "resources/";
-static const char *CONTAINER_FNAME = "container.jpg";
-static const char *FACE_FNAME = "awesomeface.jpg";
+static const char *CONTAINER_FNAME = "container2.png";
+static const char *BLICK_FNAME = "BLICK2.png";
 
 static GLboolean keys[1024];
+int lightMode = FULL_MODE;
 
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mode) {
     if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GL_TRUE);
-    if(action == GLFW_PRESS)
+    if (key == GLFW_KEY_0) {
+        lightMode = (lightMode + 1) % 3;
+    } else if(action == GLFW_PRESS) {
         keys[key] = true;
-    else if(action == GLFW_RELEASE)
+    } else if(action == GLFW_RELEASE) {
         keys[key] = false;
+    }
 }
+
 
 
 inline void setUpGlfwOptions() {
@@ -77,6 +89,20 @@ void setBufferVBO(GLuint &VBO, const GLfloat *vertices, const GLuint sizeof_vert
     }
 }
 
+GLuint generateAndDownloadTexture(const char *containerPath) {
+    GLuint texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+
+    int width, height;
+    unsigned char* image = SOIL_load_image(containerPath, &width, &height, 0, SOIL_LOAD_RGB);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, image);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    SOIL_free_image_data(image);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    return texture;
+}
+
 
 GLuint setCubeVAO(GLuint &VBO) {
     GLuint cubeVAO;
@@ -84,10 +110,12 @@ GLuint setCubeVAO(GLuint &VBO) {
     setBufferVBO(VBO, vertices, sizeof(vertices), GL_FALSE);
 
     glBindVertexArray(cubeVAO);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*) 0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (GLvoid*) 0);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*) (GLvoid*)(3 * sizeof(GLfloat)));
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (GLvoid*) (GLvoid*)(3 * sizeof(GLfloat)));
     glEnableVertexAttribArray(1);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (GLvoid*) (GLvoid*)(6 * sizeof(GLfloat)));
+    glEnableVertexAttribArray(2);
     glBindVertexArray(0);
     return cubeVAO;
 }
@@ -98,7 +126,7 @@ GLuint setLampVAO(GLuint &VBO) {
     setBufferVBO(VBO, vertices, sizeof(vertices), GL_FALSE);
 
     glBindVertexArray(lampVAO);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (GLvoid*)0);
     glEnableVertexAttribArray(0);
     glBindVertexArray(0);
     return lampVAO;
@@ -113,44 +141,81 @@ void checkWindowCreated(GLFWwindow *window) {
     }
 }
 
-Materials setMaterial(Shaders &objShader) {
+Materials setMaterial(Shaders &objShader, GLboolean isTexture=GL_FALSE) {
     /// MATERIALS MATERIAL
     /// OBJ
-    glm::vec3 materialAmbient(1.0f, 0.5f, 0.31f);
-    glm::vec3 materialDiffuse(1.0f, 0.5f, 0.31f);
-    glm::vec3 materialSpecular(0.5f, 0.5f, 0.5f);
-    GLfloat materialShininess = 32.0f;
-    const char *materialFieldNames[] = {
-            "material.ambient",
-            "material.diffuse",
-            "material.specular",
-            "material.shininess"
-    };
+    if (!isTexture) {
+        glm::vec3 materialAmbient(1.0f, 0.5f, 0.31f);
+        glm::vec3 materialDiffuse(1.0f, 0.5f, 0.31f);
+        glm::vec3 materialSpecular(0.5f, 0.5f, 0.5f);
+        GLfloat materialShininess = 32.0f;
+        const char *materialFieldNames[] = {
+                "material.ambient",
+                "material.diffuse",
+                "material.specular",
+                "material.shininess"
+        };
 
-    Materials materials(materialAmbient, materialDiffuse, materialSpecular, materialShininess, objShader, materialFieldNames);
-    return materials;
+        Materials materials(materialAmbient, materialDiffuse, materialSpecular, materialShininess, objShader,
+                            materialFieldNames);
+        return materials;
+    } else {
+        GLfloat materialShininess = 32.0f;
+        const char *materialFieldNames[] = {
+                "material.specular",
+                "material.shininess",
+                "material.diffuse"
+        };
+
+        Materials materials(materialShininess, objShader, materialFieldNames);
+        return materials;
+    }
 }
 
-Lights setLights(Shaders &objShader, glm::vec3 lightPos) {
-    glm::vec3 lightAmbient(0.2f, 0.2f, 0.2f);
-    glm::vec3 lightDiffuse(0.5f, 0.5f, 0.5f);
-    glm::vec3 lightSpecular(1.0f, 1.0f, 1.0f);
-    const char *lightsFieldNames[] = {
-            "light.ambient",
-            "light.diffuse",
-            "light.specular",
-            "light.position"
+Lights setSunLights(Shaders &objShader) {
+    glm::vec3 sunAmbient(0.1f, 0.1f, 0.1f);
+    glm::vec3 sunDiffuse(0.35f, 0.35f, 0.35f);
+    glm::vec3 sunSpecular(0.7f, 0.7f, 0.7f);
+    glm::vec3 sunDirection(0.0f, -1.0f, 0.3f);
+    const char *sunFieldNames[] = {
+            "sun.ambient",
+            "sun.diffuse",
+            "sun.specular",
+            "sun.direction"
     };
 
-    Lights lights(lightAmbient, lightDiffuse, lightSpecular, lightPos, objShader, lightsFieldNames);
+    Lights lights(sunAmbient, sunDiffuse, sunSpecular, sunDirection, objShader, sunFieldNames);
     return lights;
 }
 
 
+Lights setDirectLights(Shaders &objShader, glm::vec3 lightPos) {
+    glm::vec3 lightAmbient(0.2f, 0.2f, 0.2f);
+    glm::vec3 lightDiffuse(0.5f, 0.5f, 0.5f);
+    glm::vec3 lightSpecular(1.0f, 1.0f, 1.0f);
+    GLfloat constant = 1.0f;
+    GLfloat linear = 0.045f;
+    GLfloat quadratic = 0.0075;
+    const char *lightsFieldNames[] = {
+            "light.ambient",
+            "light.diffuse",
+            "light.specular",
+            "light.position",
+            "light.constant",
+            "light.linear",
+            "light.quadratic",
+    };
+
+    Lights lights(lightAmbient, lightDiffuse, lightSpecular, lightPos, constant, linear, quadratic, objShader, lightsFieldNames);
+    return lights;
+}
+
 
 int main() {
     const std::string containerPath = std::string(RESOURCES_DIR) + std::string(CONTAINER_FNAME);
-    const std::string facePath = std::string(RESOURCES_DIR) + std::string(FACE_FNAME);
+    const std::string specularMapPath = std::string(RESOURCES_DIR) + std::string(BLICK_FNAME);
+
+//    const std::string facePath = std::string(RESOURCES_DIR) + std::string(FACE_FNAME);
 
     glfwInit();
     setUpGlfwOptions();
@@ -194,6 +259,10 @@ int main() {
     // ISTOCHNIK SVETA VAO
     GLuint lampVAO = setLampVAO(VBO);
 
+    /// TEXTURES
+    GLuint containerTexture = generateAndDownloadTexture(containerPath.c_str());
+    GLuint specularMapTexture = generateAndDownloadTexture(specularMapPath.c_str());
+
     //////////////
 //    GLint objectColorLoc = glGetUniformLocation(objShader.shaderProgram, "objectColor");
 
@@ -201,8 +270,11 @@ int main() {
     glm::vec3 lightPos(1.2f, 1.0f, 2.0f);
 
     /// MATERIALS
-    Materials materials = setMaterial(objShader);    /// MATERIALS
-    Lights lights = setLights(objShader, lightPos);  /// LIGHTS
+    Materials materials = setMaterial(objShader, GL_TRUE);    /// MATERIALS
+    Lights directLights = setDirectLights(objShader, lightPos);  /// LIGHTS
+    Lights sunLights = setSunLights(objShader); /// LIGHTS SUN
+    GLint lightModeLoc = glGetUniformLocation(objShader.shaderProgram, "lightMode");
+
 
     /// MATRIXES
     /// Матрица перспективы
@@ -229,7 +301,6 @@ int main() {
     GLint lampViewLoc = glGetUniformLocation(lampShader.shaderProgram, "view");
 
     GLint viewPosLoc = glGetUniformLocation(objShader.shaderProgram, "viewPos");
-
     //Start polling
     while(!glfwWindowShouldClose(window))
     {
@@ -241,27 +312,48 @@ int main() {
 
         // OBJ
         objShader.use();
-        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
-        glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
-        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+
+        ///BIND TEXTURES
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, containerTexture);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, specularMapTexture);
+
+        ///SET UNIFORMS
+        materials.setUniforms();
+        sunLights.setUniforms();
+        directLights.setUniforms();
 
         glUniform3f(viewPosLoc, Camera::cameraPos.x, Camera::cameraPos.y, Camera::cameraPos.z);
-        materials.setUniforms();
-        lights.setUniforms();
+        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
+        glUniform1i(lightModeLoc, lightMode);
+
+//        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 
         glBindVertexArray(cubeVAO);
-        glDrawArrays(GL_TRIANGLES, 0, 36);
+        for(GLuint i = 0; i < 10; i++)
+        {
+            model = glm::mat4(1.0f);
+            model = glm::translate(model, cubePositions[i]);
+//            GLfloat angle = 20.0f * i;
+//            model = glm::rotate(model, angle, glm::vec3(1.0f, 0.3f, 0.5f));
+            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+
+            glDrawArrays(GL_TRIANGLES, 0, 36);
+        }
 
         // LAMP
-        lampShader.use();
+        if (lightMode != SUN_LIGHT_MODE) {
+            lampShader.use();
 
-        glUniformMatrix4fv(lampViewLoc, 1, GL_FALSE, glm::value_ptr(view));
-        glUniformMatrix4fv(lampProjectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
-        glUniformMatrix4fv(lampModelLoc, 1, GL_FALSE, glm::value_ptr(lampModel));
+            glUniformMatrix4fv(lampViewLoc, 1, GL_FALSE, glm::value_ptr(view));
+            glUniformMatrix4fv(lampProjectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
+            glUniformMatrix4fv(lampModelLoc, 1, GL_FALSE, glm::value_ptr(lampModel));
+            glBindVertexArray(lampVAO);
 
-        glBindVertexArray(lampVAO);
-        glDrawArrays(GL_TRIANGLES, 0, 36);
-
+            glDrawArrays(GL_TRIANGLES, 0, 36);
+        }
         glBindVertexArray(0);
         glfwSwapBuffers(window);
     }

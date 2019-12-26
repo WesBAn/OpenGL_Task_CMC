@@ -15,12 +15,17 @@ struct Materials {
     glm::vec3 specular{};
     GLfloat shininess;
 
+    GLboolean textureMode;
     GLint locations[4]{};
 
     Materials(glm::vec3 ambient,
               glm::vec3 diffuse,
               glm::vec3 specular,
               GLfloat shininess,
+              Shaders &shader,
+              const char *materialNames[] = nullptr);
+
+    Materials(GLfloat shininess,
               Shaders &shader,
               const char *materialNames[] = nullptr);
 
@@ -32,15 +37,30 @@ struct Lights {
     glm::vec3 diffuse{};
     glm::vec3 specular{};
     glm::vec3 position{};
+    glm::vec3 direction{};
 
-    GLint locations[4]{};
+    GLfloat constant = 0.0f;
+    GLfloat linear = 0.0f;
+    GLfloat quadratic = 0.0f;
+    GLint locations[7]{};
+    GLboolean sunMode = GL_FALSE;
 
     Lights(glm::vec3 ambient,
            glm::vec3 diffuse,
            glm::vec3 specular,
            glm::vec3 position,
+           GLfloat constant,
+           GLfloat linear,
+           GLfloat quadratic,
            Shaders &lampShader,
            const char *lampNames[] = nullptr);
+
+    Lights(glm::vec3 ambient,
+           glm::vec3 diffuse,
+           glm::vec3 specular,
+           glm::vec3 direction,
+           Shaders &lampShader,
+           const char *lampNames[]);
 
     void setUniforms();
 };
