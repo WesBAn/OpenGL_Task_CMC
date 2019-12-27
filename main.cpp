@@ -41,13 +41,20 @@ static const char *WINDOWS_VERTEX_SHADER_NAME = "shaders/windowvert.glsl";
 static const char *WINDOWS_FRAGMENT_SHADER_NAME = "shaders/windowfragment.glsl";
 static const char *NORM_MAP_VERTEX_SHADER_NAME = "shaders/nmappingvert.glsl";
 static const char *NORM_MAP_FRAGMENT_SHADER_NAME = "shaders/nmappingfragment.glsl";
+static const char *PARALLAX_MAP_VERTEX_SHADER_NAME = "shaders/parallaxvert.glsl";
+static const char *PARALLAX_MAP_FRAGMENT_SHADER_NAME = "shaders/parallaxfragment.glsl";
+
+
+
 static const char *RESOURCES_DIR = "resources/";
 static const char *CONTAINER_FNAME = "container2.png";
 static const char *BLICK_FNAME = "BLICK2.png";
 static const char *FLOOR_FNAME = "floor1.jpg";
 static const char *WINDOW_FNAME = "window.png";
-static const char *WALL_FNAME = "brickwall.jpg";
-static const char *WALL_NORMAL_FNAME = "brickwall_normal.jpg";
+static const char *WALL_FNAME = "StoneWall.png";
+static const char *WALL_NORMAL_FNAME = "StoneWallNormal.png";
+static const char *WALL_HEIGHT_FNAME = "StoneWallHeight.png";
+
 
 
 static const char *AME_MAJESTY_PACK[] = {
@@ -64,22 +71,44 @@ const std::string floorPath = std::string(RESOURCES_DIR) + std::string(FLOOR_FNA
 const std::string windowPath = std::string(RESOURCES_DIR) + std::string(WINDOW_FNAME);
 const std::string wallPath = std::string(RESOURCES_DIR) + std::string(WALL_FNAME);
 const std::string wallNormalPath = std::string(RESOURCES_DIR) + std::string(WALL_NORMAL_FNAME);
+const std::string wallHeightPath = std::string(RESOURCES_DIR) + std::string(WALL_HEIGHT_FNAME);
+
 
 
 static GLboolean keys[1024];
 GLint lightMode = FULL_MODE;
-
+GLboolean parallaxMod = GL_TRUE;
+GLfloat heightScale = 0.1;
 
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mode) {
     if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GL_TRUE);
-    if (key == GLFW_KEY_0) {
+    else if (key == GLFW_KEY_0)
         lightMode = (lightMode + 1) % 3;
-    } else if(action == GLFW_PRESS) {
+    else if (key == GLFW_KEY_P)
+        parallaxMod = GL_TRUE;
+    else if (key == GLFW_KEY_N)
+        parallaxMod = GL_FALSE;
+    else  if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
+    {
+        if (heightScale > 0.0f)
+            heightScale -= 0.0005f;
+        else
+            heightScale = 0.0f;
+    }
+    else if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
+    {
+        if (heightScale < 1.0f)
+            heightScale += 0.0005f;
+        else
+            heightScale = 1.0f;
+    }
+    else if (action == GLFW_PRESS) {
         keys[key] = true;
-    } else if(action == GLFW_RELEASE) {
+    } else if (action == GLFW_RELEASE) {
         keys[key] = false;
     }
+
 }
 
 
@@ -384,9 +413,10 @@ void renderSkybox(GLint &skyboxViewLoc,
     glDepthMask(GL_TRUE);
 }
 
-GLuint quadVAO = 0;
 GLuint quadVBO;
-void getNormalMap()
+GLuint quadVAO = 0;
+
+void normalParallaxPolling()
 {
     if (quadVAO == 0)
     {
@@ -426,7 +456,6 @@ void getNormalMap()
         bitangent1 = glm::normalize(bitangent1);
 
         // triangle 2
-        // ----------
         edge1 = pos3 - pos1;
         edge2 = pos4 - pos1;
         deltaUV1 = uv3 - uv1;
@@ -439,12 +468,10 @@ void getNormalMap()
         tangent2.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
         tangent2 = glm::normalize(tangent2);
 
-
         bitangent2.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
         bitangent2.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
         bitangent2.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
         bitangent2 = glm::normalize(bitangent2);
-
 
         float quadVertices[] = {
                 // positions            // normal         // texcoords  // tangent                          // bitangent
@@ -473,9 +500,7 @@ void getNormalMap()
         glEnableVertexAttribArray(4);
         glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, 14 * sizeof(float), (void*)(11 * sizeof(float)));
     }
-    glBindVertexArray(quadVAO);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-    glBindVertexArray(0);
+
 }
 
 
@@ -504,6 +529,7 @@ int main() {
     Shaders skyboxShader(SKYBOX_VERTEX_SHADER_NAME, SKYBOX_FRAGMENT_SHADER_NAME);
     Shaders windowsShader(WINDOWS_VERTEX_SHADER_NAME, WINDOWS_FRAGMENT_SHADER_NAME);
     Shaders normMapShader(NORM_MAP_VERTEX_SHADER_NAME, NORM_MAP_FRAGMENT_SHADER_NAME);
+    Shaders parallaxMapShader(PARALLAX_MAP_VERTEX_SHADER_NAME, PARALLAX_MAP_FRAGMENT_SHADER_NAME);
 
 
 
@@ -523,6 +549,8 @@ int main() {
     GLuint windowTexture = getWindowTexture(windowPath.c_str());
     GLuint wallTexture = generateAndDownloadTexture(wallPath.c_str());
     GLuint wallNormalTexture = generateAndDownloadTexture(wallNormalPath.c_str());
+    GLuint wallHeightTexture = generateAndDownloadTexture(wallHeightPath.c_str());
+
 
 
     /// VAO and VBO
@@ -555,9 +583,14 @@ int main() {
     GLint skyboxProjectionLoc = glGetUniformLocation(skyboxShader.shaderProgram, "projection");
     GLint windowProjectionLoc = glGetUniformLocation(windowsShader.shaderProgram, "projection");
     GLint normProjectionLoc = glGetUniformLocation(normMapShader.shaderProgram, "projection");
+    GLint parProjectionLoc = glGetUniformLocation(parallaxMapShader.shaderProgram, "projection");
+
 
     GLint normLightPosLoc = glGetUniformLocation(normMapShader.shaderProgram, "lightPos");
     GLint normViewPosLoc = glGetUniformLocation(normMapShader.shaderProgram, "viewPos");
+
+    GLint parLightPosLoc = glGetUniformLocation(parallaxMapShader.shaderProgram, "lightPos");
+    GLint parViewPosLoc = glGetUniformLocation(parallaxMapShader.shaderProgram, "viewPos");
 
 
     glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
@@ -567,6 +600,7 @@ int main() {
     GLint lampModelLoc = glGetUniformLocation(lampShader.shaderProgram, "model");
     GLint windowModelLoc = glGetUniformLocation(windowsShader.shaderProgram, "model");
     GLint normModelLoc = glGetUniformLocation(normMapShader.shaderProgram, "model");
+    GLint parModelLoc = glGetUniformLocation(parallaxMapShader.shaderProgram, "model");
 
 
     glm::mat4 model = glm::mat4(1.0f);
@@ -585,18 +619,35 @@ int main() {
     GLint skyboxViewLoc = glGetUniformLocation(skyboxShader.shaderProgram, "view");
     GLint windowViewLoc = glGetUniformLocation(windowsShader.shaderProgram, "view");
     GLint normViewLoc = glGetUniformLocation(normMapShader.shaderProgram, "view");
+    GLint parViewLoc = glGetUniformLocation(parallaxMapShader.shaderProgram, "view");
+
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
 
+    ///MAPS
     GLint normWallMapLoc = glGetUniformLocation(normMapShader.shaderProgram, "diffuseMap");
     GLint normWallNormalMapLoc = glGetUniformLocation(normMapShader.shaderProgram, "normalMap");
+
+    GLint parWallMapLoc = glGetUniformLocation(parallaxMapShader.shaderProgram, "diffuseMap");
+    GLint parWallNormalMapLoc = glGetUniformLocation(parallaxMapShader.shaderProgram, "normalMap");
+    GLint parWallDepthLoc = glGetUniformLocation(parallaxMapShader.shaderProgram, "depthMap");
+
 
 
     normMapShader.use();
     glUniform1i(normWallMapLoc, 0);
     glUniform1f(normWallNormalMapLoc, 1);
+
+    parallaxMapShader.use();
+    glUniform1i(parWallMapLoc, 0);
+    glUniform1f(parWallNormalMapLoc, 1);
+    glUniform1i(parWallDepthLoc, 2);
+
+    GLint parHeightScaleLoc = glGetUniformLocation(parallaxMapShader.shaderProgram, "heightScale");
+
     ///Start polling///
+    normalParallaxPolling();
     while(!glfwWindowShouldClose(window))
     {
 //        glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
@@ -676,23 +727,48 @@ int main() {
             glUniformMatrix4fv(windowModelLoc, 1, GL_FALSE, glm::value_ptr(model));
             glDrawArrays(GL_TRIANGLES, 0, 6);
         }
-
-        /// NORMAL MAPPING WALL
-        normMapShader.use();
         model = glm::mat4(1.0f);
         model = glm::translate(model, glm::vec3(1.0f, 1.0f, 5.0f));
-        model = glm::rotate(model, glm::radians((float)glfwGetTime() * -10.0f), glm::normalize(glm::vec3(1.0, 0.0, 1.0))); // rotate the quad to show normal mapping from multiple directions
-        glUniformMatrix4fv(normViewLoc, 1, GL_FALSE, glm::value_ptr(view));
-        glUniformMatrix4fv(normProjectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
-        glUniformMatrix4fv(normModelLoc, 1, GL_FALSE, glm::value_ptr(model));
-        glUniform3fv(normLightPosLoc, 1, glm::value_ptr(lightPos));
-        glUniform3fv(normViewPosLoc, 1, glm::value_ptr(Camera::cameraPos));
+//        model = glm::rotate(model, glm::radians((float) glfwGetTime() * -10.0f), glm::normalize(glm::vec3(0.5, 0.0, 0.5)));
 
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, wallTexture);
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, wallNormalTexture);
-        getNormalMap();
+        if (!parallaxMod) {
+            std::cout << "NO PARALLAX\n";
+            /// NORMAL MAPPING WALL
+            normMapShader.use();
+            glUniformMatrix4fv(normViewLoc, 1, GL_FALSE, glm::value_ptr(view));
+            glUniformMatrix4fv(normProjectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
+            glUniformMatrix4fv(normModelLoc, 1, GL_FALSE, glm::value_ptr(model));
+            glUniform3fv(normLightPosLoc, 1, glm::value_ptr(lightPos));
+            glUniform3fv(normViewPosLoc, 1, glm::value_ptr(Camera::cameraPos));
+
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, wallTexture);
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, wallNormalTexture);
+            glBindVertexArray(quadVAO);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+        } else {
+            std::cout << "PARALLAX\n";
+
+            parallaxMapShader.use();
+            glUniformMatrix4fv(parViewLoc, 1, GL_FALSE, glm::value_ptr(view));
+            glUniformMatrix4fv(parProjectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
+            glUniformMatrix4fv(parModelLoc, 1, GL_FALSE, glm::value_ptr(model));
+            glUniform3fv(parLightPosLoc, 1, glm::value_ptr(lightPos));
+            glUniform3fv(parViewPosLoc, 1, glm::value_ptr(Camera::cameraPos));
+            glUniform1f(parHeightScaleLoc, heightScale);
+
+//            std::cout << heightScale << std::endl;
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, wallTexture);
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, wallNormalTexture);
+            glActiveTexture(GL_TEXTURE2);
+            glBindTexture(GL_TEXTURE_2D, wallHeightTexture);
+            glBindVertexArray(quadVAO);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+        }
+//        glBindVertexArray(0);
         ///
 
         renderSkybox(skyboxViewLoc, skyboxProjectionLoc, camera, skyboxShader, skyboxVAO, skyboxTexture, projection);
