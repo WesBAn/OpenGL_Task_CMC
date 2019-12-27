@@ -39,11 +39,15 @@ static const char *SKYBOX_VERTEX_SHADER_NAME = "shaders/skyboxvert.glsl";
 static const char *SKYBOX_FRAGMENT_SHADER_NAME = "shaders/skyboxfragment.glsl";
 static const char *WINDOWS_VERTEX_SHADER_NAME = "shaders/windowvert.glsl";
 static const char *WINDOWS_FRAGMENT_SHADER_NAME = "shaders/windowfragment.glsl";
+static const char *NORM_MAP_VERTEX_SHADER_NAME = "shaders/nmappingvert.glsl";
+static const char *NORM_MAP_FRAGMENT_SHADER_NAME = "shaders/nmappingfragment.glsl";
 static const char *RESOURCES_DIR = "resources/";
 static const char *CONTAINER_FNAME = "container2.png";
 static const char *BLICK_FNAME = "BLICK2.png";
 static const char *FLOOR_FNAME = "floor1.jpg";
 static const char *WINDOW_FNAME = "window.png";
+static const char *WALL_FNAME = "brickwall.jpg";
+static const char *WALL_NORMAL_FNAME = "brickwall_normal.jpg";
 
 
 static const char *AME_MAJESTY_PACK[] = {
@@ -58,6 +62,8 @@ const std::string containerPath = std::string(RESOURCES_DIR) + std::string(CONTA
 const std::string specularMapPath = std::string(RESOURCES_DIR) + std::string(BLICK_FNAME);
 const std::string floorPath = std::string(RESOURCES_DIR) + std::string(FLOOR_FNAME);
 const std::string windowPath = std::string(RESOURCES_DIR) + std::string(WINDOW_FNAME);
+const std::string wallPath = std::string(RESOURCES_DIR) + std::string(WALL_FNAME);
+const std::string wallNormalPath = std::string(RESOURCES_DIR) + std::string(WALL_NORMAL_FNAME);
 
 
 static GLboolean keys[1024];
@@ -378,6 +384,100 @@ void renderSkybox(GLint &skyboxViewLoc,
     glDepthMask(GL_TRUE);
 }
 
+GLuint quadVAO = 0;
+GLuint quadVBO;
+void getNormalMap()
+{
+    if (quadVAO == 0)
+    {
+        // positions
+        glm::vec3 pos1(-1.0f,  1.0f, 0.0f);
+        glm::vec3 pos2(-1.0f, -1.0f, 0.0f);
+        glm::vec3 pos3( 1.0f, -1.0f, 0.0f);
+        glm::vec3 pos4( 1.0f,  1.0f, 0.0f);
+        // texture coordinates
+        glm::vec2 uv1(0.0f, 1.0f);
+        glm::vec2 uv2(0.0f, 0.0f);
+        glm::vec2 uv3(1.0f, 0.0f);
+        glm::vec2 uv4(1.0f, 1.0f);
+        // normal vector
+        glm::vec3 nm(0.0f, 0.0f, 1.0f);
+
+        // calculate tangent/bitangent vectors of both triangles
+        glm::vec3 tangent1, bitangent1;
+        glm::vec3 tangent2, bitangent2;
+        // triangle 1
+        // ----------
+        glm::vec3 edge1 = pos2 - pos1;
+        glm::vec3 edge2 = pos3 - pos1;
+        glm::vec2 deltaUV1 = uv2 - uv1;
+        glm::vec2 deltaUV2 = uv3 - uv1;
+
+        GLfloat f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+
+        tangent1.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+        tangent1.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+        tangent1.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+        tangent1 = glm::normalize(tangent1);
+
+        bitangent1.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
+        bitangent1.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
+        bitangent1.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
+        bitangent1 = glm::normalize(bitangent1);
+
+        // triangle 2
+        // ----------
+        edge1 = pos3 - pos1;
+        edge2 = pos4 - pos1;
+        deltaUV1 = uv3 - uv1;
+        deltaUV2 = uv4 - uv1;
+
+        f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+
+        tangent2.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+        tangent2.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+        tangent2.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+        tangent2 = glm::normalize(tangent2);
+
+
+        bitangent2.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
+        bitangent2.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
+        bitangent2.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
+        bitangent2 = glm::normalize(bitangent2);
+
+
+        float quadVertices[] = {
+                // positions            // normal         // texcoords  // tangent                          // bitangent
+                pos1.x, pos1.y, pos1.z, nm.x, nm.y, nm.z, uv1.x, uv1.y, tangent1.x, tangent1.y, tangent1.z, bitangent1.x, bitangent1.y, bitangent1.z,
+                pos2.x, pos2.y, pos2.z, nm.x, nm.y, nm.z, uv2.x, uv2.y, tangent1.x, tangent1.y, tangent1.z, bitangent1.x, bitangent1.y, bitangent1.z,
+                pos3.x, pos3.y, pos3.z, nm.x, nm.y, nm.z, uv3.x, uv3.y, tangent1.x, tangent1.y, tangent1.z, bitangent1.x, bitangent1.y, bitangent1.z,
+
+                pos1.x, pos1.y, pos1.z, nm.x, nm.y, nm.z, uv1.x, uv1.y, tangent2.x, tangent2.y, tangent2.z, bitangent2.x, bitangent2.y, bitangent2.z,
+                pos3.x, pos3.y, pos3.z, nm.x, nm.y, nm.z, uv3.x, uv3.y, tangent2.x, tangent2.y, tangent2.z, bitangent2.x, bitangent2.y, bitangent2.z,
+                pos4.x, pos4.y, pos4.z, nm.x, nm.y, nm.z, uv4.x, uv4.y, tangent2.x, tangent2.y, tangent2.z, bitangent2.x, bitangent2.y, bitangent2.z
+        };
+        // configure plane VAO
+        glGenVertexArrays(1, &quadVAO);
+        glGenBuffers(1, &quadVBO);
+        glBindVertexArray(quadVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 14 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 14 * sizeof(float), (void*)(3 * sizeof(float)));
+        glEnableVertexAttribArray(2);
+        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 14 * sizeof(float), (void*)(6 * sizeof(float)));
+        glEnableVertexAttribArray(3);
+        glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, 14 * sizeof(float), (void*)(8 * sizeof(float)));
+        glEnableVertexAttribArray(4);
+        glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, 14 * sizeof(float), (void*)(11 * sizeof(float)));
+    }
+    glBindVertexArray(quadVAO);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glBindVertexArray(0);
+}
+
 
 int main() {
     // BASE SET
@@ -403,10 +503,15 @@ int main() {
     Shaders lampShader(LVERTEX_SHADER_NAME, LFRAGMENT_SHADER_NAME);
     Shaders skyboxShader(SKYBOX_VERTEX_SHADER_NAME, SKYBOX_FRAGMENT_SHADER_NAME);
     Shaders windowsShader(WINDOWS_VERTEX_SHADER_NAME, WINDOWS_FRAGMENT_SHADER_NAME);
+    Shaders normMapShader(NORM_MAP_VERTEX_SHADER_NAME, NORM_MAP_FRAGMENT_SHADER_NAME);
+
+
 
     if (!lampShader.shaderCreatingStatus
             or !objShader.shaderCreatingStatus
-            or !skyboxShader.shaderCreatingStatus) {
+            or !skyboxShader.shaderCreatingStatus
+            or !normMapShader.shaderCreatingStatus
+            or !windowsShader.shaderCreatingStatus) {
         return -1;
     }
 
@@ -416,6 +521,9 @@ int main() {
     GLuint floorTexture = generateAndDownloadTexture(floorPath.c_str(), GL_TRUE);
     GLuint skyboxTexture = downloadAndSetUpSkybox();
     GLuint windowTexture = getWindowTexture(windowPath.c_str());
+    GLuint wallTexture = generateAndDownloadTexture(wallPath.c_str());
+    GLuint wallNormalTexture = generateAndDownloadTexture(wallNormalPath.c_str());
+
 
     /// VAO and VBO
     // VBO
@@ -446,6 +554,11 @@ int main() {
     GLint lampProjectionLoc = glGetUniformLocation(lampShader.shaderProgram, "projection");
     GLint skyboxProjectionLoc = glGetUniformLocation(skyboxShader.shaderProgram, "projection");
     GLint windowProjectionLoc = glGetUniformLocation(windowsShader.shaderProgram, "projection");
+    GLint normProjectionLoc = glGetUniformLocation(normMapShader.shaderProgram, "projection");
+
+    GLint normLightPosLoc = glGetUniformLocation(normMapShader.shaderProgram, "lightPos");
+    GLint normViewPosLoc = glGetUniformLocation(normMapShader.shaderProgram, "viewPos");
+
 
     glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
 
@@ -453,6 +566,8 @@ int main() {
     GLint modelLoc = glGetUniformLocation(objShader.shaderProgram, "model");
     GLint lampModelLoc = glGetUniformLocation(lampShader.shaderProgram, "model");
     GLint windowModelLoc = glGetUniformLocation(windowsShader.shaderProgram, "model");
+    GLint normModelLoc = glGetUniformLocation(normMapShader.shaderProgram, "model");
+
 
     glm::mat4 model = glm::mat4(1.0f);
     glm::mat4 lampModel(1.0f);
@@ -462,33 +577,25 @@ int main() {
 
     // Матрица вида
     glm::mat4 view(1.0f);
-    GLint viewLoc = glGetUniformLocation(objShader.shaderProgram, "view");
     GLint viewPosLoc = glGetUniformLocation(objShader.shaderProgram, "viewPos");
+
+
+    GLint viewLoc = glGetUniformLocation(objShader.shaderProgram, "view");
     GLint lampViewLoc = glGetUniformLocation(lampShader.shaderProgram, "view");
     GLint skyboxViewLoc = glGetUniformLocation(skyboxShader.shaderProgram, "view");
     GLint windowViewLoc = glGetUniformLocation(windowsShader.shaderProgram, "view");
+    GLint normViewLoc = glGetUniformLocation(normMapShader.shaderProgram, "view");
+
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
 
-//    ///NORMAL MAPPING
-//    unsigned int depthMapFBO;
-//    glGenFramebuffers(1, &depthMapFBO);
-//    const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
-//    unsigned int depthMap;
-//    glGenTextures(1, &depthMap);
-//    glBindTexture(GL_TEXTURE_2D, depthMap);
-//    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT,
-//                 SHADOW_WIDTH, SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-//
-//    glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
-//    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthMap, 0);
-//    glDrawBuffer(GL_NONE);
-//    glReadBuffer(GL_NONE);
-//    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    GLint normWallMapLoc = glGetUniformLocation(normMapShader.shaderProgram, "diffuseMap");
+    GLint normWallNormalMapLoc = glGetUniformLocation(normMapShader.shaderProgram, "normalMap");
+
+
+    normMapShader.use();
+    glUniform1i(normWallMapLoc, 0);
+    glUniform1f(normWallNormalMapLoc, 1);
     ///Start polling///
     while(!glfwWindowShouldClose(window))
     {
@@ -570,7 +677,23 @@ int main() {
             glDrawArrays(GL_TRIANGLES, 0, 6);
         }
 
+        /// NORMAL MAPPING WALL
+        normMapShader.use();
+        model = glm::mat4(1.0f);
+        model = glm::translate(model, glm::vec3(1.0f, 1.0f, 5.0f));
+        model = glm::rotate(model, glm::radians((float)glfwGetTime() * -10.0f), glm::normalize(glm::vec3(1.0, 0.0, 1.0))); // rotate the quad to show normal mapping from multiple directions
+        glUniformMatrix4fv(normViewLoc, 1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(normProjectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
+        glUniformMatrix4fv(normModelLoc, 1, GL_FALSE, glm::value_ptr(model));
+        glUniform3fv(normLightPosLoc, 1, glm::value_ptr(lightPos));
+        glUniform3fv(normViewPosLoc, 1, glm::value_ptr(Camera::cameraPos));
 
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, wallTexture);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, wallNormalTexture);
+        getNormalMap();
+        ///
 
         renderSkybox(skyboxViewLoc, skyboxProjectionLoc, camera, skyboxShader, skyboxVAO, skyboxTexture, projection);
         glBindVertexArray(0);
